@@ -198,8 +198,8 @@ func (s *K8sSvc) K8sObjCrUpd(shard uint32, svc *corev1.Service) ([]*RestOp, erro
             if rest_op.Err == nil {
                 if rest_op.Model == "Pool" {
                     AviPoolCacheAdd(s.avi_obj_cache.PoolCache, rest_op)
-                    s.k8s_ep.K8sEpSvcToPoolCacheAdd(vs_cache_key, "service",
-                                                    rest_op)
+                    AviSvcToPoolCacheAdd(s.avi_obj_cache.SvcToPoolCache, rest_op,
+                                         "service", vs_cache_key)
                 } else if rest_op.Model == "VirtualService" {
                     AviVsCacheAdd(s.avi_obj_cache.VsCache, rest_op)
                 }
@@ -258,7 +258,7 @@ func (s *K8sSvc) K8sObjDelete(shard uint32, key string) ([]*RestOp, error) {
      * [service/name-pool-http-tcp] = true
      * [ingress/name-pool-http-tcp] = true
      */
-    ppool_map, ok := s.k8s_ep.K8sEpSvcToPoolCacheGet(cache_key)
+    ppool_map, ok := s.avi_obj_cache.SvcToPoolCache.AviMultiCacheGetKey(cache_key)
     if !ok {
         AviLog.Info.Printf("Key %v not found in SvcToPoolCache", cache_key)
     } else {
@@ -280,7 +280,7 @@ func (s *K8sSvc) K8sObjDelete(shard uint32, key string) ([]*RestOp, error) {
     }
 
     AviLog.Info.Printf("Delete key %v service in SvcToPoolCache", cache_key)
-    s.k8s_ep.K8sEpSvcToPoolCacheDel(cache_key, "service")
+    AviSvcToPoolCacheDel(s.avi_obj_cache.SvcToPoolCache, "service", cache_key)
 
     AviLog.Info.Printf("Delete VS %v in VsCache", cache_key)
     AviVsCacheDel(s.avi_obj_cache.VsCache, cache_key)

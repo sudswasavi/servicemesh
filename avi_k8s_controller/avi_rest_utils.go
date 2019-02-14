@@ -26,7 +26,7 @@ type AviRestClientPool struct {
     AviClient []*clients.AviClient
 }
 
-func NewAviRestClientPool(num uint32, api_ep string, username string, 
+func NewAviRestClientPool(num uint32, api_ep string, username string,
                           password string) (*AviRestClientPool, error) {
     var p AviRestClientPool
 
