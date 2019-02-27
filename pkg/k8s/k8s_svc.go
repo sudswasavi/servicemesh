@@ -49,6 +49,10 @@ func NewK8sSvc(avi_obj_cache *utils.AviObjCache, avi_rest_client_pool *utils.Avi
 
 func (s *K8sSvc) K8sObjCrUpd(shard uint32, svc *corev1.Service) ([]*utils.RestOp, error) {
 	ep, err := s.informers.EpInformer.Lister().Endpoints(svc.Namespace).Get(svc.Name)
+	if len(ep.Subsets) == 0 {
+		utils.AviLog.Warning.Printf("Skip sync for service %v, No valid endpoint found", svc.Name)
+		return nil, &utils.SkipSyncError{"Skip sync"}
+	}
 	if err != nil {
 		utils.AviLog.Warning.Printf("Ep for Svc Namespace %s Name %s not present",
 			svc.Namespace, svc.Name)
