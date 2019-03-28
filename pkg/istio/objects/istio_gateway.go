@@ -21,9 +21,8 @@ import (
 	"github.com/golang/protobuf/proto"
 )
 
-// Everything is in memory for us, so we will keep things typed on resources despite them containing
-// generic information. This means that those hydrating these structs should be aware of the types as well.
-// Makes a client coupled design, but we are fine with that for now.
+/* These structs consist of generic information but we still type them into resource
+specific structs for now. This is because, we would want to keep the design modular*/
 type Gateway struct {
 	ConfigMeta
 	Spec proto.Message
