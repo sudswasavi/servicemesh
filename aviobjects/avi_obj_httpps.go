@@ -77,7 +77,7 @@ func AviHttpPSBuild(hps_meta *utils.AviHttpPolicySetMeta) *utils.RestOp {
 		} else if hppmap.PoolGroup != "" {
 			action := "HTTP_SWITCHING_SELECT_POOLGROUP"
 			sw_action.Action = &action
-			pg_ref := fmt.Sprintf("/api/poolgroupl/?name=%s", hppmap.PoolGroup)
+			pg_ref := fmt.Sprintf("/api/poolgroup/?name=%s", hppmap.PoolGroup)
 			sw_action.PoolGroupRef = &pg_ref
 		}
 		rule := avimodels.HTTPRequestRule{Enable: &enable, Index: &idx,
@@ -86,13 +86,13 @@ func AviHttpPSBuild(hps_meta *utils.AviHttpPolicySetMeta) *utils.RestOp {
 		idx = idx + 1
 	}
 
-	macro := utils.AviRestObjMacro{ModelName: "HTTPRequestPolicy", Data: hps}
+	macro := utils.AviRestObjMacro{ModelName: "HTTPPolicySet", Data: hps}
 
 	// TODO Version should be latest from configmap
 	rest_op := utils.RestOp{Path: "/api/macro", Method: utils.RestPost, Obj: macro,
-		Tenant: hps_meta.Tenant, Model: "HTTPRequestPolicy", Version: CtrlVersion}
+		Tenant: hps_meta.Tenant, Model: "HTTPPolicySet", Version: CtrlVersion}
 
 	utils.AviLog.Info.Print(spew.Sprintf("HTTPRequestPolicy Restop %v AviHttpPolicySetMeta %v\n",
-		rest_op, *hps_meta))
+		utils.Stringify(rest_op), *hps_meta))
 	return &rest_op
 }

@@ -16,6 +16,8 @@ package mcp
 import (
 	"fmt"
 
+	istio_objs "github.com/avinetworks/servicemesh/pkg/istio/objects"
+	"github.com/avinetworks/servicemesh/pkg/utils"
 	"github.com/golang/protobuf/proto"
 	istio_networking_v1alpha3 "istio.io/api/networking/v1alpha3"
 )
@@ -37,7 +39,7 @@ var (
 		Group:       "networking",
 		Version:     "v1alpha3",
 		MessageName: "istio.networking.v1alpha3.Gateway",
-		Validate:    ValidateGateway,
+		Validate:    istio_objs.ValidateGateway,
 		Collection:  "istio/networking/v1alpha3/gateways",
 	}
 	// ServiceEntry describes service entries
@@ -60,15 +62,7 @@ var (
 )
 
 func ValidateVirtualService(name, namespace string, msg proto.Message) (errs error) {
-	fmt.Println("No-op for now")
-	// This is a bogus print log here to initialize the "istio.io/api/networking/v1alpha3"
-	// Can be removed when we use this package for more work.
-	fmt.Println(istio_networking_v1alpha3.TLSSettings_ISTIO_MUTUAL)
-	return
-}
-
-func ValidateGateway(name, namespace string, msg proto.Message) (errs error) {
-	fmt.Println("No-op for now")
+	utils.AviLog.Info.Println("No-op for now")
 	// This is a bogus print log here to initialize the "istio.io/api/networking/v1alpha3"
 	// Can be removed when we use this package for more work.
 	fmt.Println(istio_networking_v1alpha3.TLSSettings_ISTIO_MUTUAL)
@@ -76,7 +70,7 @@ func ValidateGateway(name, namespace string, msg proto.Message) (errs error) {
 }
 
 func ValidateServiceEntry(name, namespace string, msg proto.Message) (errs error) {
-	fmt.Println("No-op for now")
+	utils.AviLog.Info.Println("No-op for now")
 	// This is a bogus print log here to initialize the "istio.io/api/networking/v1alpha3"
 	// Can be removed when we use this package for more work.
 	fmt.Println(istio_networking_v1alpha3.TLSSettings_ISTIO_MUTUAL)

@@ -15,25 +15,34 @@
 package objects
 
 import (
-	"fmt"
 	"time"
 
+	"github.com/avinetworks/servicemesh/pkg/istio/serviceregistry"
+	"github.com/avinetworks/servicemesh/pkg/utils"
 	"github.com/golang/protobuf/proto"
+)
+
+const (
+	GATEWAY             = "gateway"
+	ISTIOVIRTUALSERVICE = "virtual-service"
 )
 
 var OldGwMap *IstioObjectMap
 var OldVsMap *IstioObjectMap
 var NewGwMap *IstioObjectMap
 var NewVsMap *IstioObjectMap
-var gwOpsMap *IstioObjectOpsContainer
-var vsOpsMap *IstioObjectOpsContainer
+var OpsCtrl *IstioObjectOpsController
+var VsGwMap *GatewayToVsMap
+var SvcRegistry *serviceregistry.ServiceRegistry
 
-func init() {
+func InitObjects(avi_obj_cache *utils.AviObjCache, avi_rest_client_pool *utils.AviRestClientPool) *IstioObjectOpsController {
 	// Initialize the recognized type maps
 	OldGwMap = NewIstioObjectMap()
 	OldVsMap = NewIstioObjectMap()
-	gwOpsMap = NewIstioObjectOpsContainer("gateway")
-	vsOpsMap = NewIstioObjectOpsContainer("virtual-service")
+	OpsCtrl = NewIstioObjectOpsController(avi_obj_cache, avi_rest_client_pool)
+	VsGwMap = NewGatewayToVsMap()
+	SvcRegistry = serviceregistry.NewServiceRegistry()
+	return OpsCtrl
 
 }
 
@@ -76,16 +85,17 @@ type ConfigMeta struct {
 
 func (c ConfigMeta) QueueByTypes(spec proto.Message) {
 	switch c.Type {
-	case "gateway":
+	case GATEWAY:
 		// Hydrate the Gateway Structs
 		gw := NewIstioObject(c, spec)
 		key := c.Namespace + ":" + c.Name
 		NewGwMap.AddObj(key, gw)
 
-	case "virtual-service":
+	case ISTIOVIRTUALSERVICE:
 		// Hydrate the VS Structs
 		vs := NewIstioObject(c, spec)
 		key := c.Namespace + ":" + c.Name
+		utils.AviLog.Trace.Println("Adding VS ", key)
 		NewVsMap.AddObj(key, vs)
 	}
 }
@@ -93,9 +103,9 @@ func (c ConfigMeta) QueueByTypes(spec proto.Message) {
 func InitializeObjs(objType string) {
 	// Initialize the objects
 	switch objType {
-	case "gateway":
+	case GATEWAY:
 		NewGwMap = NewIstioObjectMap()
-	case "virtual-service":
+	case ISTIOVIRTUALSERVICE:
 		NewVsMap = NewIstioObjectMap()
 	}
 }
@@ -108,49 +118,55 @@ func CalculateUpdates(objType string) {
 	If the key is present and the resourceVersion is same, we no-op.
 	If the key is absent in the old map but present in the newMap - we assume that it's an add operation. */
 	switch objType {
-	case "gateway":
-		for newKey, newValue := range NewGwMap.objMap {
+	case GATEWAY:
+		for newKey, newValue := range NewGwMap.ObjMap {
 			ok, val := OldGwMap.GetObjByNameNamespace(newKey)
 			if !ok {
+				key := GATEWAY + "/" + newKey
 				// Key is not found in the old map - it's an add
-				gwOpsMap.AddOps(newKey, "ADD")
+				OpsCtrl.AddOps(key, ADD)
 			} else {
 				// Compare if the resourceVersions are same
 				if val.ConfigMeta.ResourceVersion != newValue.ConfigMeta.ResourceVersion {
 					// It's an update
-					gwOpsMap.AddOps(newKey, "UPDATE")
+					key := GATEWAY + "/" + newKey
+					OpsCtrl.AddOps(key, UPDATE)
 				}
 			}
 		}
-		for oldKey, _ := range OldGwMap.objMap {
+		for oldKey, _ := range OldGwMap.ObjMap {
 			ok, _ := NewGwMap.GetObjByNameNamespace(oldKey)
 			if !ok {
-				gwOpsMap.AddOps(oldKey, "DELETE")
+				key := GATEWAY + "/" + oldKey
+				OpsCtrl.AddOps(key, DELETE)
 			}
 		}
 		// Now let's swap the old with the new
-		OldGwMap.objMap = NewGwMap.objMap
-	case "virtual-service":
-		for newKey, newValue := range NewVsMap.objMap {
+		OldGwMap.ObjMap = NewGwMap.ObjMap
+	case ISTIOVIRTUALSERVICE:
+		for newKey, newValue := range NewVsMap.ObjMap {
 			ok, val := OldVsMap.GetObjByNameNamespace(newKey)
 			if !ok {
+				key := ISTIOVIRTUALSERVICE + "/" + newKey
 				// Key is not found in the old map - it's an add
-				fmt.Println("Add", val)
+				OpsCtrl.AddOps(key, ADD)
 			} else {
 				// Compare if the resourceVersions are same
 				if val.ConfigMeta.ResourceVersion != newValue.ConfigMeta.ResourceVersion {
 					// It's an update
-					fmt.Println("Update", val)
+					key := ISTIOVIRTUALSERVICE + "/" + newKey
+					OpsCtrl.AddOps(key, UPDATE)
 				}
 			}
 		}
-		for oldKey, _ := range OldVsMap.objMap {
-			ok, val := NewVsMap.GetObjByNameNamespace(oldKey)
+		for oldKey, _ := range OldVsMap.ObjMap {
+			ok, _ := NewVsMap.GetObjByNameNamespace(oldKey)
 			if !ok {
-				fmt.Println("Delete", val)
+				key := ISTIOVIRTUALSERVICE + "/" + oldKey
+				OpsCtrl.AddOps(key, DELETE)
 			}
 		}
 		// Now let's swap the old with the new
-		OldVsMap.objMap = NewVsMap.objMap
+		OldVsMap.ObjMap = NewVsMap.ObjMap
 	}
 }

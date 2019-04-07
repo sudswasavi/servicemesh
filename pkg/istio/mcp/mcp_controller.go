@@ -21,6 +21,7 @@ import (
 	"time"
 
 	istio_objs "github.com/avinetworks/servicemesh/pkg/istio/objects"
+	"github.com/avinetworks/servicemesh/pkg/utils"
 	"github.com/gogo/protobuf/types"
 	"istio.io/istio/pkg/mcp/sink"
 )
@@ -29,9 +30,12 @@ type Controller struct {
 	syncedMu                sync.Mutex
 	synced                  map[string]bool
 	descriptorsByCollection map[string]ProtoSchema
+	avi_obj_cache           *utils.AviObjCache
+	avi_rest_client_pool    *utils.AviRestClientPool
+	OpsCtrl                 *istio_objs.IstioObjectOpsController
 }
 
-func NewController() *Controller {
+func NewController(avi_obj_cache *utils.AviObjCache, avi_rest_client_pool *utils.AviRestClientPool, stopCh <-chan struct{}) *Controller {
 	synced := make(map[string]bool)
 	descriptorsByMessageName := make(map[string]ProtoSchema, len(IstioConfigTypes))
 	for _, descriptor := range IstioConfigTypes {
@@ -41,10 +45,13 @@ func NewController() *Controller {
 			synced[descriptor.Collection] = false
 		}
 	}
-
+	opsCtrl := istio_objs.InitObjects(avi_obj_cache, avi_rest_client_pool)
 	return &Controller{
 		synced:                  synced,
 		descriptorsByCollection: descriptorsByMessageName,
+		avi_obj_cache:           avi_obj_cache,
+		avi_rest_client_pool:    avi_rest_client_pool,
+		OpsCtrl:                 opsCtrl,
 	}
 }
 
@@ -93,7 +100,7 @@ func (c *Controller) Apply(change *sink.Change) error {
 	createTime := time.Now()
 	for _, obj := range change.Objects {
 		namespace, name := extractNameNamespace(obj.Metadata.Name)
-		fmt.Println("Got an update for name %s", name)
+		utils.AviLog.Info.Println("Got an update for name", name)
 		if err := schema.Validate(name, namespace, obj.Body); err != nil {
 			// Discard the resource
 			continue

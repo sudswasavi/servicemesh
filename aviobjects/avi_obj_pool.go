@@ -35,7 +35,7 @@ func AviPoolBuild(pool_meta *utils.K8sAviPoolMeta) *utils.RestOp {
 
 	pool := avimodels.Pool{Name: &name, CloudConfigCksum: &cksum,
 		CreatedBy: &cr, TenantRef: &tenant, ServiceMetadata: &svc_mdata}
-
+	pool.EastWest = pool_meta.EastWest
 	// TODO other fields like cloud_ref and lb algo
 
 	for _, server := range pool_meta.Servers {

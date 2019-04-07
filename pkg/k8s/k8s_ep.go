@@ -21,6 +21,7 @@ import (
 
 	avimodels "github.com/avinetworks/sdk/go/models"
 	"github.com/avinetworks/servicemesh/aviobjects"
+	"github.com/avinetworks/servicemesh/pkg/istio/serviceregistry"
 	"github.com/avinetworks/servicemesh/pkg/utils"
 	corev1 "k8s.io/api/core/v1"
 )
@@ -57,7 +58,7 @@ func NewK8sEp(avi_obj_cache *utils.AviObjCache, avi_rest_client_pool *utils.AviR
  */
 
 func (p *K8sEp) K8sObjCrUpd(shard uint32, ep *corev1.Endpoints,
-	name_prefix string, crud_hash_key string) ([]*utils.RestOp, error) {
+	name_prefix string, crud_hash_key string) ([]*utils.RestOp, []*serviceregistry.ServiceEndpoint, error) {
 	/*
 	 * Endpoints.Subsets is an array with each subset having a list of
 	 * ready/not-ready addresses and ports. If a endpoint has 2 ports, one ready
@@ -130,11 +131,11 @@ func (p *K8sEp) K8sObjCrUpd(shard uint32, ep *corev1.Endpoints,
 	// Fix this by creating a pool/poolgroup for every service even if the endpoint subset is empty but the targetPorts are present.
 	if !process_pool {
 		utils.AviLog.Info.Printf("Endpoint %v is not present in Pool/Pg cache.", k)
-		return nil, nil
+		return nil, nil, nil
 	}
 
 	var rest_ops []*utils.RestOp
-
+	var endpointInfoCollection []*serviceregistry.ServiceEndpoint
 	for _, pool_name := range pool_names {
 		// Check if resourceVersion is same as cksum from cache. If so, skip upd
 		pool_key := utils.NamespaceName{Namespace: tenant, Name: pool_name}
@@ -168,6 +169,8 @@ func (p *K8sEp) K8sObjCrUpd(shard uint32, ep *corev1.Endpoints,
 		port_num, _ := strconv.Atoi(port)
 		protocol := s1[1]
 		pool_meta.Protocol = protocol
+		endpointInfo := &serviceregistry.ServiceEndpoint{}
+		endpointInfo.Protocol = protocol
 		for _, ss := range ep.Subsets {
 			var epp_port int32
 			port_match := false
@@ -181,6 +184,7 @@ func (p *K8sEp) K8sObjCrUpd(shard uint32, ep *corev1.Endpoints,
 			}
 			if port_match {
 				pool_meta.Port = epp_port
+				endpointInfo.Port = epp_port
 				for _, addr := range ss.Addresses {
 					var atype string
 					ip := addr.IP
@@ -194,10 +198,12 @@ func (p *K8sEp) K8sObjCrUpd(shard uint32, ep *corev1.Endpoints,
 					if addr.NodeName != nil {
 						server.ServerNode = *addr.NodeName
 					}
+					endpointInfo.Servers = append(endpointInfo.Servers, server)
 					pool_meta.Servers = append(pool_meta.Servers, server)
 				}
 			}
 		}
+		endpointInfoCollection = append(endpointInfoCollection, endpointInfo)
 		rest_op := aviobjects.AviPoolBuild(&pool_meta)
 		rest_ops = append(rest_ops, rest_op)
 	}
@@ -208,9 +214,9 @@ func (p *K8sEp) K8sObjCrUpd(shard uint32, ep *corev1.Endpoints,
 				aviobjects.AviPoolCacheAdd(p.avi_obj_cache.PoolCache, rest_op)
 			}
 		}
-		return nil, nil
+		return nil, endpointInfoCollection, nil
 	} else {
-		return rest_ops, nil
+		return rest_ops, endpointInfoCollection, nil
 	}
 }
 

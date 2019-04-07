@@ -43,6 +43,7 @@ func AviVsBuild(vs_meta *utils.K8sAviVsMeta) []*utils.RestOp {
 	}
 	network_prof := "/api/networkprofile/?name=" + vs_meta.NetworkProfile
 	app_prof := "/api/applicationprofile/?name=" + vs_meta.ApplicationProfile
+	fqdn := vs_meta.FQDN
 	// TODO use PoolGroup and use policies if there are > 1 pool, etc.
 	name := vs_meta.Name
 	cksum := vs_meta.CloudConfigCksum
@@ -53,7 +54,8 @@ func AviVsBuild(vs_meta *utils.K8sAviVsMeta) []*utils.RestOp {
 		ApplicationProfileRef: &app_prof,
 		CloudConfigCksum:      &cksum,
 		CreatedBy:             &cr,
-		EastWestPlacement:     &east_west}
+		EastWestPlacement:     &east_west,
+		Fqdn:                  &fqdn}
 
 	if vs_meta.DefaultPoolGroup != "" {
 		pool_ref := "/api/poolgroup/?name=" + vs_meta.DefaultPoolGroup

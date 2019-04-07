@@ -20,6 +20,7 @@ import (
 	"net/url"
 	"sync"
 
+	"github.com/avinetworks/servicemesh/pkg/utils"
 	"google.golang.org/grpc"
 	mcpapi "istio.io/api/mcp/v1alpha1"
 	"istio.io/istio/pkg/mcp/client"
@@ -56,7 +57,8 @@ func (c *MCPClient) addStartFunc(fn startFunc) {
 
 type startFunc func(stop <-chan struct{}) error
 
-func (c *MCPClient) InitMCPClient() error {
+func (c *MCPClient) InitMCPClient(avi_obj_cache *utils.AviObjCache, avi_rest_client_pool *utils.AviRestClientPool, stopCh <-chan struct{}) (*Controller, error) {
+	var mcpController *Controller
 	clientNodeID := ""
 	collections := make([]sink.CollectionOptions, len(IstioConfigTypes))
 	for i, model := range IstioConfigTypes {
@@ -75,19 +77,19 @@ func (c *MCPClient) InitMCPClient() error {
 		u, err := url.Parse(addr)
 		if err != nil {
 			cancel()
-			return err
+			return nil, err
 		}
-		fmt.Println("The MCP server address", u.Host)
+		utils.AviLog.Info.Println("The MCP server address", u.Host)
 		securityOption := grpc.WithInsecure()
 		msgSizeOption := grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(DefaultMCPMaxMsgSize))
 		conn, err := grpc.DialContext(ctx, u.Host, securityOption, msgSizeOption)
 		if err != nil {
 			fmt.Errorf("Unable to dial MCP Server %q: %v", u.Host, err)
 			cancel()
-			return err
+			return nil, err
 		}
 		cl := mcpapi.NewAggregatedMeshConfigServiceClient(conn)
-		mcpController := NewController()
+		mcpController = NewController(avi_obj_cache, avi_rest_client_pool, stopCh)
 		sinkOptions := &sink.Options{
 			CollectionOptions: collections,
 			Updater:           mcpController,
@@ -96,7 +98,7 @@ func (c *MCPClient) InitMCPClient() error {
 		}
 		mcpClient := client.New(cl, sinkOptions)
 		configz.Register(mcpClient)
-		fmt.Println("Successfully registered the client")
+		utils.AviLog.Info.Println("Successfully registered the MCP client")
 		clients = append(clients, mcpClient)
 		conns = append(conns, conn)
 	}
@@ -131,5 +133,5 @@ func (c *MCPClient) InitMCPClient() error {
 
 		return nil
 	})
-	return nil
+	return mcpController, nil
 }

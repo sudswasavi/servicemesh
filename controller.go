@@ -163,14 +163,12 @@ func NewAviController(num_workers uint32, inf *utils.Informers, cs *kubernetes.C
 			c.workqueue[bkt].AddRateLimited(key)
 		},
 		UpdateFunc: func(old, cur interface{}) {
-			oldobj := old.(*corev1.Service)
+			//oldobj := old.(*corev1.Service)
 			svc := cur.(*corev1.Service)
-			if oldobj.ResourceVersion != svc.ResourceVersion {
-				// Only add the key if the resource versions have changed.
-				key := "Service/" + utils.CrudHashKey("Service", svc) + "/" + ObjKey(svc)
-				bkt := Bkt(key, num_workers)
-				c.workqueue[bkt].AddRateLimited(key)
-			}
+			// Only add the key if the resource versions have changed.
+			key := "Service/" + utils.CrudHashKey("Service", svc) + "/" + ObjKey(svc)
+			bkt := Bkt(key, num_workers)
+			c.workqueue[bkt].AddRateLimited(key)
 		},
 	}
 
@@ -239,9 +237,6 @@ func (c *AviController) Start(stopCh <-chan struct{}) {
 // workers to finish processing their current work items.
 func (c *AviController) Run(stopCh <-chan struct{}) error {
 	defer runtime.HandleCrash()
-	for i := uint32(0); i < c.num_workers; i++ {
-		defer c.workqueue[i].ShutDown()
-	}
 
 	// Start the informer factories to begin populating the informer caches
 	utils.AviLog.Info.Print("Starting Avi controller")
@@ -253,10 +248,14 @@ func (c *AviController) Run(stopCh <-chan struct{}) error {
 	}
 
 	utils.AviLog.Info.Print("Started workers")
-	<-stopCh
-	utils.AviLog.Info.Print("Shutting down workers")
 
 	return nil
+}
+
+func (c *AviController) StopWorkers(stopCh <-chan struct{}) {
+	for i := uint32(0); i < c.num_workers; i++ {
+		defer c.workqueue[i].ShutDown()
+	}
 }
 
 // runWorker is a long-running function that will continually call the
@@ -391,7 +390,7 @@ func (c *AviController) syncHandler(key string, worker_id uint32) error {
 
 	if obj_type_ns[0] == "Endpoints" {
 		if evt == utils.UpdateEv {
-			_, err = c.k8s_ep.K8sObjCrUpd(worker_id, obj.(*corev1.Endpoints),
+			_, _, err = c.k8s_ep.K8sObjCrUpd(worker_id, obj.(*corev1.Endpoints),
 				"", obj_type_ns[1])
 		} else {
 			_, err = c.k8s_ep.K8sObjDelete(worker_id, key)

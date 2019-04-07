@@ -21,6 +21,8 @@ import (
 	avimodels "github.com/avinetworks/sdk/go/models"
 	"github.com/avinetworks/sdk/go/session"
 	"github.com/avinetworks/servicemesh/aviobjects"
+	"github.com/avinetworks/servicemesh/pkg/istio/objects"
+	"github.com/avinetworks/servicemesh/pkg/istio/serviceregistry"
 	"github.com/avinetworks/servicemesh/pkg/utils"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/cache"
@@ -49,6 +51,7 @@ func NewK8sSvc(avi_obj_cache *utils.AviObjCache, avi_rest_client_pool *utils.Avi
 
 func (s *K8sSvc) K8sObjCrUpd(shard uint32, svc *corev1.Service) ([]*utils.RestOp, error) {
 	ep, err := s.informers.EpInformer.Lister().Endpoints(svc.Namespace).Get(svc.Name)
+	_, port_protocols := s.k8s_ep.GetValidPorts(ep)
 	if err != nil {
 		utils.AviLog.Warning.Printf("Ep for Svc Namespace %s Name %s not present",
 			svc.Namespace, svc.Name)
@@ -83,11 +86,16 @@ func (s *K8sSvc) K8sObjCrUpd(shard uint32, svc *corev1.Service) ([]*utils.RestOp
 	var rest_ops []*utils.RestOp
 
 	// Build Pool with Endpoints
-	pool_rest_ops, err := s.k8s_ep.K8sObjCrUpd(shard, ep, svc.Name, crud_hash_key)
+	pool_rest_ops, endpointInfo, err := s.k8s_ep.K8sObjCrUpd(shard, ep, svc.Name, crud_hash_key)
+
+	//Let's populate the service registry for this service and the endpoints
+	registryRequest := serviceregistry.NewServicePropRequest(svc.Name)
+	registryRequest.AddedEndpoints = endpointInfo
+	// TODO (sudswas): Services should also have the ability to process the service registry update.
+	objects.SvcRegistry.MergeServiceProperties(registryRequest)
 	if pool_rest_ops != nil {
 		rest_ops = append(rest_ops, pool_rest_ops...)
 	}
-	_, port_protocols := s.k8s_ep.GetValidPorts(ep)
 	// Populate poolgroups
 	pg_rest_ops := s.CreatePoolGroups(port_protocols, svc, crud_hash_key)
 	if pg_rest_ops != nil {

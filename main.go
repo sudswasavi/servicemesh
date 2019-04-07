@@ -35,30 +35,17 @@ var (
 func main() {
 	flag.Parse()
 	flag.Lookup("logtostderr").Value.Set("true")
-
+	var mcpCtrl *mcp.Controller
 	// set up signals so we handle the first shutdown signal gracefully
 	stopCh := utils.SetupSignalHandler()
 	kubeCluster := false
 	// Check if we are running inside kubernetes. Hence try authenticating with service token
 	cfg, err := rest.InClusterConfig()
 	if err != nil {
-
 		utils.AviLog.Warning.Printf("We are not running inside kubernetes cluster. %s", err.Error())
-
 	} else {
-		// TODO (sudswas): Remove the hard coding later.
-		istioEnabled := "False"
-		istioEnabled = os.Getenv("ISTIO_ENABLED")
-		if istioEnabled == "True" {
-			mcpServers := []string{"mcp://istio-galley.istio-system.svc:9901"}
-			mcpClient := mcp.MCPClient{MCPServerAddrs: mcpServers}
-			_ = mcpClient.InitMCPClient()
-			// TODO (sudswas): Need to handle the stop signal
-			mcpClient.Start(stopCh)
-		}
 		utils.AviLog.Info.Println("We are running inside kubernetes cluster. Won't use kubeconfig files.")
 		kubeCluster = true
-
 	}
 
 	if kubeCluster == false {
@@ -74,7 +61,6 @@ func main() {
 	}
 
 	informers := NewInformers(kubeClient)
-
 	avi_obj_cache := utils.NewAviObjCache(kubeClient, informers)
 
 	// TODO get API endpoint/username/password from configmap and track configmap
@@ -88,9 +74,19 @@ func main() {
 	}
 	avi_rest_client_pool, err := utils.NewAviRestClientPool(utils.NumWorkers,
 		ctrlIpAddress, ctrlUsername, ctrlPassword)
-
 	avi_obj_cache.AviObjCachePopulate(avi_rest_client_pool.AviClient[0],
 		aviobjects.CtrlVersion, "Default-Cloud")
+	istioEnabled := "False"
+	istioEnabled = os.Getenv("ISTIO_ENABLED")
+	if istioEnabled == "True" {
+		//MCP_URL format: mcp://<IP>:port
+		mcpServerURL := os.Getenv("MCP_URL")
+		mcpServers := []string{mcpServerURL}
+		mcpClient := mcp.MCPClient{MCPServerAddrs: mcpServers}
+		mcpCtrl, _ = mcpClient.InitMCPClient(avi_obj_cache, avi_rest_client_pool, stopCh)
+		// TODO (sudswas): Need to handle the stop signal
+		mcpClient.Start(stopCh)
+	}
 	k8s_ep := k8s.NewK8sEp(avi_obj_cache, avi_rest_client_pool, informers)
 	//k8s_ingr = kube.NewK8sIng(avi_obj_cache, avi_rest_client_pool, informers, k8s_ep)
 	k8s_svc := k8s.NewK8sSvc(avi_obj_cache, avi_rest_client_pool, informers, k8s_ep)
@@ -98,8 +94,13 @@ func main() {
 	c := NewAviController(utils.NumWorkers, informers, kubeClient, k8s_ep, k8s_svc)
 
 	c.Start(stopCh)
-
 	c.Run(stopCh)
+	mcpCtrl.OpsCtrl.Start(stopCh)
+	<-stopCh
+	c.StopWorkers(stopCh)
+	utils.AviLog.Info.Print("Shutting down Kube workers")
+	mcpCtrl.OpsCtrl.StopWorkers(stopCh)
+	utils.AviLog.Info.Print("Shutting down Istio workers")
 }
 
 func init() {

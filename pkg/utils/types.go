@@ -92,6 +92,11 @@ type AviPoolMetaServer struct {
 	ServerNode string
 }
 
+type ServerNode struct {
+	Ip         string
+	ServerNode string
+}
+
 type K8sAviPoolMeta struct {
 	Name             string
 	Tenant           string
@@ -100,6 +105,7 @@ type K8sAviPoolMeta struct {
 	Port             int32
 	Servers          []AviPoolMetaServer
 	Protocol         string
+	EastWest         *bool
 }
 
 type K8sAviPoolGroupMeta struct {
@@ -117,6 +123,12 @@ type AviPortProtocol struct {
 
 type AviPortStrProtocol struct {
 	Port     string // Can be Port name or int32 string
+	Protocol string
+}
+
+type EndpointInfo struct {
+	Servers  []ServerNode
+	Port     int32
 	Protocol string
 }
 
@@ -140,6 +152,7 @@ type K8sAviVsMeta struct {
 	EastWest           bool
 	CloudConfigCksum   string
 	DefaultPoolGroup   string
+	FQDN               string
 }
 
 /*
